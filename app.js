@@ -3,9 +3,11 @@ const express = require('express');
 const ejs = require('ejs');
 const bodyParser = require('body-parser');
 const mongoose = require("mongoose");
-const encrypt = require("mongoose-encryption");
+const bcrypt = require("bcrypt");
+const saltRounds = 10;
 
 const app = express();
+//console.log(process.env.SECRET);
 app.set('view engine', 'ejs');
 
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -17,9 +19,6 @@ const userSchema = new mongoose.Schema({
     email: String,
     password: String
 });
-
-
-userSchema.plugin(encrypt, { secret: process.env.SECRET, encryptedFields: ["password"] });
 
 const User = mongoose.model("User", userSchema);
 
@@ -36,37 +35,45 @@ app.get("/register", function(req, res) {
 });
 
 app.post("/register", function(req, res) {
-    const newUser = new User({
-        email: req.body.username,
-        password: req.body.password
-    })
-    newUser.save(function(err) {
-        if (!err) {
-            res.render("secrets");
-        } else {
-            res.send(err);
-        }
+    bcrypt.hash(req.body.password, saltRounds, function(err, hash) {
+        // Store hash in your password DB.
+        const newUser = new User({
+            email: req.body.username,
+            password: hash
+        })
+        newUser.save(function(err) {
+            if (!err) {
+                res.render("secrets");
+            } else {
+                res.send(err);
+            }
+        });
     });
+
 })
 
 app.post("/login", function(req, res) {
-    let username = req.body.username;
-    let password = req.body.password;
+    const username = req.body.username;
+    const password = req.body.password;
 
     User.findOne({ email: username }, function(err, foundUser) {
         if (err) {
-            res.send(err);
+            res.render("login");
         } else {
-            if (foundUser.password == password) {
-                res.render("secrets");
-            } else {
-                res.send("User not found");
-            }
+            bcrypt.compare(password, foundUser.password, function(err, result) {
+                // result == true
+                if (result) {
+                    res.render("secrets");
+                } else {
+                    res.send("User not found");
+                }
+            });
+
         }
     })
 })
 
-let port = 3000;
+let port = 4000;
 
 app.listen(port, function() {
     console.log("Server started at port " + port);
